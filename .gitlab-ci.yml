@@ -1,0 +1,30 @@
+# Self-contained GitLab bake for this repo's schema variant.
+# Requirements on the runner: rootless podman or docker, git, network access to
+# LIBRARY_REPO_URL (or an internal mirror; for air-gapped runners see README).
+variables:
+  LIBRARY_REPO_URL: "https://github.com/M4lwar/exificient-native-image.git"
+  LIBRARY_REF: "master"            # switch to v1.0.0 after the library re-cut
+  SCHEMA_PATH: "schemas/UCI_MessageDefinitions_v2_5_0.xsd"
+  SCHEMA_ID: "uci-2.5.0"
+  BAKE_BUILDER_IMAGE: "ghcr.io/m4lwar/exificient-builder:1.0.0-x86_64"
+  BAKE_RUNNER_TAGS: ""             # single tag string (GitLab expands one var to ONE tag)
+
+bake:
+  stage: build
+  tags:
+    - $BAKE_RUNNER_TAGS
+  script:
+    - git clone --depth 1 --branch "$LIBRARY_REF" "$LIBRARY_REPO_URL" library
+    - cp schemas/*.xsd library/schemas/
+    - cd library && ./bake.sh --builder "$BAKE_BUILDER_IMAGE"
+        --source . --schema "$SCHEMA_PATH" --id "$SCHEMA_ID"
+        --out "$CI_PROJECT_DIR/bake-out"
+    - |
+      if [ -n "${CI_SERVER_HOST:-}" ] && command -v conan >/dev/null 2>&1; then
+        conan remote add gitlab "https://${CI_SERVER_HOST}/api/v4/projects/${CI_PROJECT_ID}/packages/conan" || true
+        conan cache restore "$CI_PROJECT_DIR"/bake-out/conan-exificient-*.tgz
+        CONAN_LOGIN_USERNAME=ci_user CONAN_PASSWORD="$CI_JOB_TOKEN" \
+          conan upload "exificient/*" -r gitlab --confirm
+      fi
+  artifacts:
+    paths: [bake-out/]

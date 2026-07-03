@@ -1,0 +1,39 @@
+name: bake
+
+# === Your schema variant: change these two values (that's the whole config) ===
+env:
+  SCHEMA_PATH: schemas/UCI_MessageDefinitions_v2_5_0.xsd
+  SCHEMA_ID: uci-2.5.0
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  bake:
+    # Reusable workflow from the library repo: checks out the library at the
+    # pinned ref, stages this repo's schemas/ (imports included), builds the
+    # hermetic builder image, and bakes on both Linux arches.
+    # NOTE: GitHub cannot interpolate env into 'with:' for reusable workflows — keep these in sync with the env block above.
+    uses: M4lwar/exificient-native-image/.github/workflows/bake.yml@master
+    with:
+      schema-path: schemas/UCI_MessageDefinitions_v2_5_0.xsd
+      schema-id: uci-2.5.0
+      ref: master
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: bake
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          path: dist
+      - name: Publish baked artifacts
+        uses: softprops/action-gh-release@7c4723f7a335432393329f8f1c564994ce50185d # v3
+        with:
+          files: dist/**/*.tgz
