@@ -45,6 +45,11 @@ bake:
           GIT_OPTS="-c http.sslCAInfo=${CI_SERVER_TLS_CA_FILE}"
           CONAN_REMOTE_OPTS=""
           export REQUESTS_CA_BUNDLE="${CI_SERVER_TLS_CA_FILE}" SSL_CERT_FILE="${CI_SERVER_TLS_CA_FILE}"
+          # Conan 2 ignores REQUESTS_CA_BUNDLE; it reads its own conf key.
+          if command -v conan >/dev/null 2>&1; then
+            mkdir -p "$(conan config home)"
+            echo "core.net.http:cacert_path=${CI_SERVER_TLS_CA_FILE}" >> "$(conan config home)/global.conf"
+          fi
         else
           echo "WARNING: runner CA failed live validation; same-instance TLS unverified"
         fi
