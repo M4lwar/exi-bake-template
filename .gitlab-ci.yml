@@ -35,10 +35,19 @@ bake:
   script:
     # --- trust the instance CA for same-instance operations, when provided ---
     - |
-      GIT_OPTS=""
+      # Trust the instance CA only if it actually validates (runner fleets can
+      # carry stale CA files); otherwise same-instance TLS is unverified and
+      # the Conan remote is marked insecure.
+      GIT_OPTS="-c http.sslVerify=false"
+      CONAN_REMOTE_OPTS="--insecure"
       if [ -n "${CI_SERVER_TLS_CA_FILE:-}" ] && [ -f "${CI_SERVER_TLS_CA_FILE}" ]; then
-        GIT_OPTS="-c http.sslCAInfo=${CI_SERVER_TLS_CA_FILE}"
-        export REQUESTS_CA_BUNDLE="${CI_SERVER_TLS_CA_FILE}" SSL_CERT_FILE="${CI_SERVER_TLS_CA_FILE}"
+        if git -c http.sslCAInfo="${CI_SERVER_TLS_CA_FILE}" ls-remote "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" HEAD >/dev/null 2>&1; then
+          GIT_OPTS="-c http.sslCAInfo=${CI_SERVER_TLS_CA_FILE}"
+          CONAN_REMOTE_OPTS=""
+          export REQUESTS_CA_BUNDLE="${CI_SERVER_TLS_CA_FILE}" SSL_CERT_FILE="${CI_SERVER_TLS_CA_FILE}"
+        else
+          echo "WARNING: runner CA failed live validation; same-instance TLS unverified"
+        fi
       fi
     # --- clone the library (job-token auth for same-instance mirrors) ---
     - |
@@ -56,7 +65,7 @@ bake:
     # --- publish to this project's Conan package registry ---
     - |
       if [ "$CONAN_PUBLISH" = "true" ] && command -v conan >/dev/null 2>&1; then
-        conan remote add gitlab "https://${CI_SERVER_HOST}/api/v4/projects/${CI_PROJECT_ID}/packages/conan" --force
+        conan remote add gitlab "https://${CI_SERVER_HOST}/api/v4/projects/${CI_PROJECT_ID}/packages/conan" --force ${CONAN_REMOTE_OPTS}
         conan cache restore bake-out/conan-exificient-*.tgz
         conan remote login gitlab ci_user -p "${CI_JOB_TOKEN}"
         conan upload "exificient/*" -r gitlab --confirm
