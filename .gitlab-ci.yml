@@ -22,10 +22,13 @@ variables:
   SCHEMA_ID: "uci-2.5.0"
   BAKE_BUILDER_IMAGE: "ghcr.io/m4lwar/exificient-builder:1.0.0-x86_64"
   BAKE_VERSION: "1.0.0"
+  BAKE_RUNNER_TAG: ""          # set to a runner tag to steer the job (empty = untagged runners)
   CONAN_PUBLISH: "true"
 
 bake:
   stage: build
+  tags:
+    - $BAKE_RUNNER_TAG
   image:
     name: $BAKE_BUILDER_IMAGE
     entrypoint: [""]
