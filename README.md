@@ -137,3 +137,36 @@ pieces are staged locally — the container runs with `--network=none`:
 
 MIT — see `LICENSE`. Third-party notices for `libexificient`'s own
 dependencies are in `THIRD_PARTY_NOTICES.txt`.
+
+## GitLab deployment checklist
+
+Mirroring this repo into a GitLab instance? The pipeline is designed to work
+with zero file edits (mirrors get force-synced; customize via CI/CD variables
+only). It runs as-is when:
+
+- Runners: Linux x86_64, **docker executor**, >=4 vCPU / 8 GB RAM / ~30 GB disk
+  (the native-image builder peaks near 2.6 GB RSS), accepting untagged jobs.
+- Runner egress to `ghcr.io` (builder image) and `github.com` (library clone).
+- The project's Package Registry is enabled (Conan publish; on by default).
+
+Set a CI/CD variable when your environment differs:
+
+| Situation | Variable |
+|---|---|
+| Tagged-only runners | `BAKE_RUNNER_TAG` = your runner tag |
+| No GitHub egress | `LIBRARY_REPO_URL` = an internal mirror of the library |
+| No GHCR egress | `BAKE_BUILDER_IMAGE` = the builder image in your registry (`podman save/load` to transfer) |
+
+**Same-instance library mirror gotcha:** when `LIBRARY_REPO_URL` points at a
+project on the same GitLab instance, the clone authenticates with
+`CI_JOB_TOKEN`, and GitLab >= 16 blocks cross-project job-token access by
+default — the library project must allowlist this project under
+*Settings > CI/CD > Job token permissions* (or
+`POST /projects/<library-id>/job_token_scope/allowlist`).
+
+TLS quirks self-adapt: the job live-probes the runner's CA file before
+trusting it, and the same-instance Conan remote is registered `--insecure`
+because runner CA bundles frequently lack the root certificate (python
+rejects what git tolerates). Fix the runner's `tls-ca-file` to include the
+root CA to restore fully verified transport.
+
