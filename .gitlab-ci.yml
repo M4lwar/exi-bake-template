@@ -3,7 +3,7 @@
 # LIBRARY_REPO_URL (or an internal mirror; for air-gapped runners see README).
 variables:
   LIBRARY_REPO_URL: "https://github.com/M4lwar/exificient-native-image.git"
-  LIBRARY_REF: "master"            # switch to v1.0.0 after the library re-cut
+  LIBRARY_REF: "v1.0.0"
   SCHEMA_PATH: "schemas/UCI_MessageDefinitions_v2_5_0.xsd"
   SCHEMA_ID: "uci-2.5.0"
   BAKE_BUILDER_IMAGE: "ghcr.io/m4lwar/exificient-builder:1.0.0-x86_64"

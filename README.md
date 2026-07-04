@@ -126,9 +126,9 @@ pieces are staged locally — the container runs with `--network=none`:
    `podman save ghcr.io/m4lwar/exificient-builder:1.0.0-x86_64 -o
    builder.tar`, transfer, `podman load -i builder.tar`, or push/pull via
    an internal registry.
-2. **Library source** at a pinned ref (default `master`, switch to a
-   release tag once the library re-cuts one): an internal Git mirror, or a
-   flat source tarball passed to `bake.sh --source`.
+2. **Library source** at a pinned ref (`v1.0.0`, the library's re-cut
+   release tag): an internal Git mirror, or a flat source tarball passed to
+   `bake.sh --source`.
 3. **This repo** — the schema(s) plus the two CI files. No further
    dependencies; `.gitlab-ci.yml` clones the library itself and never
    reaches out to any other host.
