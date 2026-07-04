@@ -1,30 +1,62 @@
-# Self-contained GitLab bake for this repo's schema variant.
-# Requirements on the runner: rootless podman or docker, git, network access to
-# LIBRARY_REPO_URL (or an internal mirror; for air-gapped runners see README).
+# Bake this repo's schema variant of libexificient on GitLab.
+#
+# Designed for DOCKER-EXECUTOR runners: the job runs inside the library's
+# hermetic builder image (no podman-in-docker nesting). Shell-executor runners
+# with podman can instead run the library's bake.sh directly — see the README.
+#
+# Everything is overridable per-project via CI/CD variables (no file edits
+# needed — important when this repo is consumed as a nightly-synced mirror):
+#   LIBRARY_REPO_URL   where to clone the library (same-instance URLs are
+#                      cloned with CI_JOB_TOKEN; the target project must
+#                      allowlist this project for job-token access)
+#   LIBRARY_REF        library tag/branch (default v1.0.0)
+#   SCHEMA_PATH        xsd within THIS repo (imports staged from its directory)
+#   SCHEMA_ID          baked schema slug
+#   BAKE_BUILDER_IMAGE builder image (match your runner's architecture)
+#   BAKE_VERSION       library version stamped on artifacts
+#   CONAN_PUBLISH      "true" to publish to this project's Conan registry
 variables:
   LIBRARY_REPO_URL: "https://github.com/M4lwar/exificient-native-image.git"
   LIBRARY_REF: "v1.0.0"
   SCHEMA_PATH: "schemas/UCI_MessageDefinitions_v2_5_0.xsd"
   SCHEMA_ID: "uci-2.5.0"
   BAKE_BUILDER_IMAGE: "ghcr.io/m4lwar/exificient-builder:1.0.0-x86_64"
-  BAKE_RUNNER_TAGS: ""             # single tag string (GitLab expands one var to ONE tag)
+  BAKE_VERSION: "1.0.0"
+  CONAN_PUBLISH: "true"
 
 bake:
   stage: build
-  tags:
-    - $BAKE_RUNNER_TAGS
+  image:
+    name: $BAKE_BUILDER_IMAGE
+    entrypoint: [""]
   script:
-    - git clone --depth 1 --branch "$LIBRARY_REF" "$LIBRARY_REPO_URL" library
-    - cp schemas/*.xsd library/schemas/
-    - cd library && ./bake.sh --builder "$BAKE_BUILDER_IMAGE"
-        --source . --schema "$SCHEMA_PATH" --id "$SCHEMA_ID"
-        --out "$CI_PROJECT_DIR/bake-out"
+    # --- trust the instance CA for same-instance operations, when provided ---
     - |
-      if [ -n "${CI_SERVER_HOST:-}" ] && command -v conan >/dev/null 2>&1; then
-        conan remote add gitlab "https://${CI_SERVER_HOST}/api/v4/projects/${CI_PROJECT_ID}/packages/conan" || true
-        conan cache restore "$CI_PROJECT_DIR"/bake-out/conan-exificient-*.tgz
-        CONAN_LOGIN_USERNAME=ci_user CONAN_PASSWORD="$CI_JOB_TOKEN" \
-          conan upload "exificient/*" -r gitlab --confirm
+      GIT_OPTS=""
+      if [ -n "${CI_SERVER_TLS_CA_FILE:-}" ] && [ -f "${CI_SERVER_TLS_CA_FILE}" ]; then
+        GIT_OPTS="-c http.sslCAInfo=${CI_SERVER_TLS_CA_FILE}"
+        export REQUESTS_CA_BUNDLE="${CI_SERVER_TLS_CA_FILE}" SSL_CERT_FILE="${CI_SERVER_TLS_CA_FILE}"
+      fi
+    # --- clone the library (job-token auth for same-instance mirrors) ---
+    - |
+      CLONE_URL="$LIBRARY_REPO_URL"
+      case "$CLONE_URL" in
+        https://${CI_SERVER_HOST}/*)
+          CLONE_URL="https://gitlab-ci-token:${CI_JOB_TOKEN}@${CLONE_URL#https://}" ;;
+      esac
+      git $GIT_OPTS clone --depth 1 --branch "$LIBRARY_REF" "$CLONE_URL" /src
+    # --- stage THIS repo's schemas (imports included) and bake offline ---
+    - cp "$(dirname "$SCHEMA_PATH")"/*.xsd /src/schemas/
+    - mkdir -p /out
+    - sh /src/ci/bake-inner.sh --schema "$SCHEMA_PATH" --id "$SCHEMA_ID" --version "$BAKE_VERSION"
+    - mkdir -p bake-out && cp /out/* bake-out/
+    # --- publish to this project's Conan package registry ---
+    - |
+      if [ "$CONAN_PUBLISH" = "true" ] && command -v conan >/dev/null 2>&1; then
+        conan remote add gitlab "https://${CI_SERVER_HOST}/api/v4/projects/${CI_PROJECT_ID}/packages/conan" --force
+        conan cache restore bake-out/conan-exificient-*.tgz
+        conan remote login gitlab ci_user -p "${CI_JOB_TOKEN}"
+        conan upload "exificient/*" -r gitlab --confirm
       fi
   artifacts:
     paths: [bake-out/]
