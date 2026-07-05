@@ -131,10 +131,24 @@ bake-windows:
     #     fully verified -- UNLIKE the Linux `bake` job above, which falls
     #     back to --insecure / http.sslVerify=false because its runner CA
     #     bundle carries no root cert. No --insecure flags in this job;
-    #     that asymmetry is intentional. ---
+    #     that asymmetry is intentional. NOTE: verified TLS assumes the
+    #     instance reaches the GitLab origin directly (sites whose public DNS
+    #     is CDN-proxied need a hosts pin, e.g. via the runner's
+    #     pre_get_sources_script) -- the origin CA in the cert store is
+    #     useless against a CDN edge certificate. ---
     - .\lib\bake-windows.ps1 -Schema "$env:SCHEMA_PATH" -Id "$env:SCHEMA_ID" -Version "$env:BAKE_VERSION" -Out bake-out
     - if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    # --- publish to this project's Conan package registry (verified TLS) ---
+    # --- publish to this project's Conan package registry (verified TLS).
+    #     conan is python and never reads the Windows cert store; when the
+    #     AMI ships a site trust anchor (build-ami.sh leaves it at
+    #     C:\tools\site-origin-root.pem), point conan's cacert at it so the
+    #     upload verifies. Absent that file this is a no-op. ---
+    - |
+      if (Test-Path 'C:\tools\site-origin-root.pem') {
+        $ConanHome = (conan config home | Out-String).Trim()
+        New-Item -ItemType Directory -Force -Path $ConanHome | Out-Null
+        Add-Content -Path (Join-Path $ConanHome 'global.conf') -Value 'core.net.http:cacert_path = C:/tools/site-origin-root.pem'
+      }
     - conan remote add gitlab "https://$env:CI_SERVER_HOST/api/v4/projects/$env:CI_PROJECT_ID/packages/conan" --force
     - conan cache restore (Get-Item "bake-out\conan-*windows*.tgz").FullName
     - conan remote login gitlab ci_user -p "$env:CI_JOB_TOKEN"
