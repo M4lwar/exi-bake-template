@@ -9,7 +9,7 @@
 #   LIBRARY_REPO_URL   where to clone the library (same-instance URLs are
 #                      cloned with CI_JOB_TOKEN; the target project must
 #                      allowlist this project for job-token access)
-#   LIBRARY_REF        library tag/branch (default v1.0.0)
+#   LIBRARY_REF        library tag/branch (default v1.0.1)
 #   SCHEMA_PATH        xsd within THIS repo (imports staged from its directory)
 #   SCHEMA_ID          baked schema slug
 #   BAKE_BUILDER_IMAGE builder image (match your runner's architecture)
@@ -20,11 +20,11 @@
 #                      real tag, e.g. "win-amd64", once such a runner exists)
 variables:
   LIBRARY_REPO_URL: "https://github.com/M4lwar/exificient-native-image.git"
-  LIBRARY_REF: "v1.0.0"
+  LIBRARY_REF: "v1.0.1"
   SCHEMA_PATH: "schemas/UCI_MessageDefinitions_v2_5_0.xsd"
   SCHEMA_ID: "uci-2.5.0"
   BAKE_BUILDER_IMAGE: "ghcr.io/m4lwar/exificient-builder:1.0.0-x86_64"
-  BAKE_VERSION: "1.0.0"
+  BAKE_VERSION: "1.0.1"
   BAKE_RUNNER_TAG: ""          # set to a runner tag to steer the job (empty = untagged runners)
   CONAN_PUBLISH: "true"
   BAKE_WINDOWS_RUNNER_TAG: ""  # set to a windows instance-executor runner tag to enable bake-windows
