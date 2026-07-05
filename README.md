@@ -119,19 +119,9 @@ architectures.
 
 ## Air-gap manifest
 
-Nothing in the bake needs `github.com`/`ghcr.io` egress once these three
-pieces are staged locally — the container runs with `--network=none`:
-
-1. **Builder image** (GraalVM + a pre-warmed offline Maven repo + Conan):
-   `podman save ghcr.io/m4lwar/exificient-builder:1.0.0-x86_64 -o
-   builder.tar`, transfer, `podman load -i builder.tar`, or push/pull via
-   an internal registry.
-2. **Library source** at a pinned ref (`v1.0.0`, the library's re-cut
-   release tag): an internal Git mirror, or a flat source tarball passed to
-   `bake.sh --source`.
-3. **This repo** — the schema(s) plus the two CI files. No further
-   dependencies; `.gitlab-ci.yml` clones the library itself and never
-   reaches out to any other host.
+Building a complete transfer kit for an air-gapped GitLab — this template,
+the library, and both builder images, bundled and checksummed — is one
+command: see [`exi-airgap-kit`](https://github.com/M4lwar/exi-airgap-kit).
 
 ## License
 
