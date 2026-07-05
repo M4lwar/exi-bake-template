@@ -81,7 +81,7 @@ conan cache restore conan-exificient-1.0.0+uci-2.5.0-linux-x86_64.tgz
 ```
 ```ini
 [requires]
-exificient/1.0.0
+exificient/1.0.1
 
 [options]
 exificient/*:baked_schema=uci-2.5.0
