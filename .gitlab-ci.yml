@@ -15,6 +15,9 @@
 #   BAKE_BUILDER_IMAGE builder image (match your runner's architecture)
 #   BAKE_VERSION       library version stamped on artifacts
 #   CONAN_PUBLISH      "true" to publish to this project's Conan registry
+#   BAKE_WINDOWS_RUNNER_TAG  runner tag for the manual bake-windows job below
+#                      (empty = job stays effectively unassignable; set to a
+#                      real tag, e.g. "win-amd64", once such a runner exists)
 variables:
   LIBRARY_REPO_URL: "https://github.com/M4lwar/exificient-native-image.git"
   LIBRARY_REF: "v1.0.0"
@@ -24,6 +27,7 @@ variables:
   BAKE_VERSION: "1.0.0"
   BAKE_RUNNER_TAG: ""          # set to a runner tag to steer the job (empty = untagged runners)
   CONAN_PUBLISH: "true"
+  BAKE_WINDOWS_RUNNER_TAG: ""  # set to a windows instance-executor runner tag to enable bake-windows
 
 bake:
   stage: build
@@ -73,5 +77,68 @@ bake:
         conan remote login gitlab ci_user -p "${CI_JOB_TOKEN}"
         conan upload "exificient/*" -r gitlab --confirm
       fi
+  artifacts:
+    paths: [bake-out/]
+
+# One-off Windows bake: manual button; needs a runner tagged
+# $BAKE_WINDOWS_RUNNER_TAG (GitLab instance executor over SSH into a
+# spot Windows host whose AMI already carries the whole toolchain — git,
+# GraalVM, Maven, Conan, VS Build Tools — plus the origin CA in the machine
+# trust store). Runs bake-windows.ps1 from the library clone directly on the
+# host (no container: Windows native-image can't run inside a Linux
+# container, same reasoning as the GitHub Actions bake-windows job).
+# Publishes to this project's Conan registry, same as the `bake` job above.
+bake-windows:
+  stage: build
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_TAG'
+      when: manual
+      allow_failure: true
+  tags:
+    - $BAKE_WINDOWS_RUNNER_TAG
+  variables:
+    # Ephemeral, freshly-booted instance each run -- no cached workspace to
+    # fetch into, so force a full clone of THIS repo (needed for schemas/).
+    GIT_STRATEGY: clone
+  script:
+    # --- clone the library into a dir relative to the job's working
+    #     directory ($CI_PROJECT_DIR on the instance executor) -- simpler
+    #     cleanup than an absolute C:\ path and no New-Item -Force needed.
+    #     Same-instance URLs need job-token auth exactly like the Linux
+    #     job above; this mirrors its bash case/rewrite logic in PowerShell. ---
+    - |
+      $CloneUrl = $env:LIBRARY_REPO_URL
+      if ($CloneUrl.StartsWith("https://$($env:CI_SERVER_HOST)/")) {
+        $CloneUrl = $CloneUrl -replace '^https://', "https://gitlab-ci-token:$($env:CI_JOB_TOKEN)@"
+      }
+      git clone --depth 1 --branch "$env:LIBRARY_REF" $CloneUrl lib
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    # --- stage THIS repo's schemas (imports included) into the library
+    #     clone. SCHEMA_PATH is forward-slash ("schemas/x.xsd"); Split-Path
+    #     handles that fine on Windows -- .NET treats '/' as a valid
+    #     separator there too, same as '\'. ---
+    - New-Item -ItemType Directory -Force -Path lib\schemas | Out-Null
+    - Copy-Item "$(Split-Path $env:SCHEMA_PATH)\*.xsd" lib\schemas\
+    # --- bake (bake-windows.ps1 lives at the library clone's root). The
+    #     runner's shell is Windows PowerShell 5.1 (instance executor,
+    #     `shell = "powershell"`) -- the AMI carries no PowerShell Core, so
+    #     this calls bake-windows.ps1 directly rather than via a "pwsh" exe
+    #     that doesn't exist on the host. A bare "lib\bake-windows.ps1" (no
+    #     leading .\) fails to resolve as a script path in PowerShell (it's
+    #     parsed as a module-name lookup instead) -- the ".\" prefix below is
+    #     required, not stylistic. The AMI imports the origin CA into
+    #     LocalMachine\Root at bake time, so every TLS operation below is
+    #     fully verified -- UNLIKE the Linux `bake` job above, which falls
+    #     back to --insecure / http.sslVerify=false because its runner CA
+    #     bundle carries no root cert. No --insecure flags in this job;
+    #     that asymmetry is intentional. ---
+    - .\lib\bake-windows.ps1 -Schema "$env:SCHEMA_PATH" -Id "$env:SCHEMA_ID" -Version "$env:BAKE_VERSION" -Out bake-out
+    - if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    # --- publish to this project's Conan package registry (verified TLS) ---
+    - conan remote add gitlab "https://$env:CI_SERVER_HOST/api/v4/projects/$env:CI_PROJECT_ID/packages/conan" --force
+    - conan cache restore (Get-Item "bake-out\conan-*windows*.tgz").FullName
+    - conan remote login gitlab ci_user -p "$env:CI_JOB_TOKEN"
+    - conan upload "exificient/*" -r gitlab --confirm
+    - if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   artifacts:
     paths: [bake-out/]
