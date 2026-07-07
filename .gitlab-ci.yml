@@ -21,8 +21,8 @@
 variables:
   LIBRARY_REPO_URL: "https://github.com/M4lwar/exificient-native-image.git"
   LIBRARY_REF: "v1.0.2"
-  SCHEMA_PATH: "schemas/UCI_MessageDefinitions_v2_5_0.xsd"
-  SCHEMA_ID: "uci-2.5.0"
+  SCHEMA_PATH: "schemas/A-GRA_MessageDefinitions_v5_0_a.xsd"
+  SCHEMA_ID: "agra-5.0"
   BAKE_BUILDER_IMAGE: "ghcr.io/m4lwar/exificient-builder:1.0.0-x86_64"
   BAKE_VERSION: "1.0.2"
   BAKE_RUNNER_TAG: ""          # set to a runner tag to steer the job (empty = untagged runners)

@@ -2,8 +2,8 @@ name: bake
 
 # === Your schema variant: change these two values (that's the whole config) ===
 env:
-  SCHEMA_PATH: schemas/UCI_MessageDefinitions_v2_5_0.xsd
-  SCHEMA_ID: uci-2.5.0
+  SCHEMA_PATH: schemas/A-GRA_MessageDefinitions_v5_0_a.xsd
+  SCHEMA_ID: agra-5.0
 
 on:
   push:
@@ -19,8 +19,8 @@ jobs:
     # NOTE: GitHub cannot interpolate env into 'with:' for reusable workflows — keep these in sync with the env block above.
     uses: M4lwar/exificient-native-image/.github/workflows/bake.yml@v1.0.2
     with:
-      schema-path: schemas/UCI_MessageDefinitions_v2_5_0.xsd
-      schema-id: uci-2.5.0
+      schema-path: schemas/A-GRA_MessageDefinitions_v5_0_a.xsd
+      schema-id: agra-5.0
       ref: v1.0.2
 
   release:
